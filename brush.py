@@ -1,3 +1,4 @@
+from __future__ import annotations
 from typing import Literal, get_args
 
 # Define the accepted brush colors at the type level.
