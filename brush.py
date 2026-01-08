@@ -32,10 +32,10 @@ class Brush:
         if self.MINSIZE <= int(size) <= self.MAXSIZE:
             self.size = int(size)
 
-    def get_mode(self) -> BrushMode:
+    def get_mode(self) -> str:
         return self.mode.get()
 
-    def set_mode(self, mode: BrushMode):
+    def set_mode(self, mode: str):
         self.mode.changeTo(mode)
 
     def get_colors(self):
