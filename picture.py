@@ -10,11 +10,12 @@ class Picture:
     """
     def __init__(self, image_array: Optional[List] = None):
         if image_array is not None:
-            if len(image_array) % 5 != 0:
-                raise ValueError(
-                    "[Picture::__init__]: invalid array of elements: ", image_array
-                )
-        self.img_arr = image_array
+            for pnt in image_array:
+                if len(pnt) != 5:
+                    raise ValueError(
+                        "[Picture::__init__]: invalid array of elements: ", image_array
+                    )
+        self.img_arr = image_array or []
 
     def get(self):
         return self.img_arr
