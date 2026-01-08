@@ -45,21 +45,27 @@ class GUIConstructor:
 
     def set_color_buttons(self, colors: List[str], set_color_func: Callable):
         self.color_select_btn_lst = []
-        for color in colors:
-            # Use labels instead of buttons since MacOS
-            # controls button style for consistency.
+        for idx, color in enumerate(colors):
+            # Use labels instead of buttons since macOS controls button style for consistency.
             new_lbl = Label(
                 self.tk,
                 bg=color,
                 highlightthickness=0,
-                bd=1,
+                bd=2,
+                relief="flat",
                 width=5,
                 height=3,
-                # command=lambda color=color: set_color_func(color),
             )
             self.color_select_btn_lst.append(new_lbl)
-            new_lbl.bind("<Button-1>", lambda e, c=color: set_color_func(c))
-            new_lbl.grid(row=0, column=colors.index(color))
+            
+            def on_click(event, c=color, lbl=new_lbl):
+                # Visual feedback: raise border, then return to flat
+                lbl.config(relief="raised", bd=4)
+                lbl.after(150, lambda: lbl.config(relief="flat", bd=2))
+                set_color_func(c)
+            
+            new_lbl.bind("<Button-1>", on_click)
+            new_lbl.grid(row=0, column=idx)
 
     def set_callback(
         self,
@@ -106,11 +112,11 @@ class GUIConstructor:
     def destroy(self):
         self.tk.destroy()
 
-    def root_position(self):
-        return (self.tk.winfo_rootx(), self.tk.winfo_rooty())
+    # def root_position(self):
+    #     return (self.tk.winfo_rootx(), self.tk.winfo_rooty())
 
-    def root_position(self):
-        return (self.canvas.winfo_x(), self.canvas.winfo_y())
+    # def canvas_position(self):
+    #     return (self.canvas.winfo_x(), self.canvas.winfo_y())
 
     def canvas_width(self):
         return self.canvas.winfo_width()
