@@ -1,185 +1,169 @@
-# Made By Abdul Akhundzade
+# Made By Abdul Akhundzada
 # Copyright 2020
 # Baku, AZ
 
 from tkinter import *
 from tkinter import messagebox
-import os, sys
-import pickle
+import sys
+from typing import Optional, List
 
-from gui import GUI
-from path import File
-from draw import Brush
-from image import Image
-
-try:
-	from PIL import ImageGrab
-except:
-	pass
+from gui import GUIConstructor
+from filemng import OSFileManager
+from brush import Brush
+from picture import Picture
 
 
-# if file is launched by user, change dir to script directory
-if sys.argv[0] != __file__: os.chdir(os.path.dirname(sys.argv[0])) 
-
-
-class StandArt:
+class Main:
     def __init__(self):
-        self.ui = GUI()
-        self.file = File()
+        self.gui_constructor = GUIConstructor()
+        self.file_mng = OSFileManager()
         self.brush = Brush()
-        self.image = Image()
+        self.pic = Picture()
 
-        self.ui.keyboard('Control', ('s', 'o', 'z'), self.__keyboard__)
-        self.ui.mouse_motion(self.__mouse_motion__)
-        self.ui.on_closing(self.__on_closing__)
-        self.ui.clear(self.__clear_button__)
-        self.ui.erase(self.__erase_button__)
+        self.gui_constructor.set_callback(
+            "keyboard_conf",
+            self.keyboard_callback,
+            main_key="Command" if sys.platform == "darwin" else "Control",
+            keys=("s", "o", "z"),
+        )
+        self.gui_constructor.set_callback("on_closing", self.on_closing)
+        self.gui_constructor.set_callback("mouse_motion", self.mouse_motion_callback)
+        self.gui_constructor.set_callback("clear", self.clear_btn_callback)
+        self.gui_constructor.set_callback("erase", self.erase_btn_callback)
+        self.gui_constructor.set_callback("save_file", self.save)
+        self.gui_constructor.set_callback("save_as", lambda: self.save(new_file=True))
+        self.gui_constructor.set_callback("open_file", self.open)
 
-        self.ui.add_option('Save', self.save)
-        self.ui.add_option('Save As', lambda: self.save(new_file = True))
-        self.ui.add_option('Open', self.open)
+        self.gui_constructor.set_color_buttons(
+            self.brush.get_colors(), self.brush.set_color
+        )
+        self.gui_constructor.brush_size_scale.config(command=self.brush.set_size)
 
-        self.ui.set_colors(self.brush.get_colors(), self.brush.set_color)
-        self.ui.brush_size.config(command = self.brush.set_size)
+    def save(self, new_file: bool = False):
+        success = self.file_mng.save(pic_obj=self.pic, is_new_path=new_file)
+        if not success:
+            messagebox.showwarning("Save Cancelled", "File save was cancelled.")
 
+    def open(self, path: Optional[str] = None):
+        if not self.file_mng.is_saved() and messagebox.askyesno(
+            "Save Current Picture?"
+        ):
+            self.save()
 
-    def save(self, new_file = False):
-        if (self.file.get_path() is None or new_file) and ((path := self.file.select_path('save')) is not None):
-            self.file.set_path(path)
+        pic = self.file_mng.open(path)
 
-        else: 
+        # User cancelled the file dialog.
+        if pic is None:
             return
-        
-        path = self.file.get_path()
-        extension = os.path.splitext(path)[1]
 
-        if extension == '.art':
-            with open(self.file.get_path(), 'wb') as art_file:
-                pickle.dump(self.image.get(), art_file)
+        self.pic.clear()
+        self.gui_constructor.canvas.delete("all")
+        for element in pic.get():
+            coords = element[:4]
+            color = self.brush.get_colors()[element[-1]]
+            self.draw(coords, color)
 
-        elif extension == '.png':
-            form_scale = self.ui.form_scale()
-            canvas_scale = self.ui.canvas_scale()
-
-            x1 = form_scale[0] + canvas_scale[0]
-            y1 = form_scale[1] + canvas_scale[1]
-            x2 = x1 + self.ui.canvas_width()
-            y2 = y1 + self.ui.canvas_height()
-
-            ImageGrab.grab ().crop((x1, y1, x2, y2)).save (self.file.get_path())
-        
-        self.file.set_saved(True)
-
-    
-    def open(self, path = ''):
-        if not self.file.is_saved() and messagebox.askyesno('Save Current Picture?'): self.save()
-
-        if path == '':
-            path = self.file.select_path('open')
-
-        self.file.set_path(path)
-
-        extension = os.path.splitext(path)[1]
-
-        if extension == '.art':
-            with open(self.file.get_path(), 'rb') as art_file:
-                image = Image(pickle.load(art_file))
-
-                self.image.clear()
-                self.ui.canvas.delete('all')
-
-                for element in image.get():
-                    coords = element[:4]
-                    color = self.brush.get_colors()[element[-1]]
-                    self.draw(coords, color)
-            
-            self.file.set_saved(True)
-
-
-    def draw(self, coords, color):
-        self.ui.canvas.create_oval (coords[0], coords[1],
-                                    coords[2], coords[3],
-                                    fill = color, outline = color)
-
-        self.image.add(coords, self.brush.get_colors().index(color))
-
-        self.file.set_saved(False)
-
+    def draw(
+        self,
+        coords: List[int],
+        color: str,
+        canvas: bool = True,
+        pic: bool = True,
+        file_changed: bool = False,
+    ):
+        if canvas:
+            self.gui_constructor.canvas.create_oval(
+                coords[0], coords[1], coords[2], coords[3], fill=color, outline=color
+            )
+        if pic:
+            self.pic.add(coords, self.brush.get_colors().index(color))
+        if file_changed:
+            self.file_mng.set_saved(False)
 
     def erase(self, coords):
-        ovals = self.ui.canvas.find_overlapping (coords[0], coords[1],
-                                                 coords[2], coords[3])
+        ovals = self.gui_constructor.canvas.find_overlapping(
+            coords[0], coords[1], coords[2], coords[3]
+        )
 
-        if len (ovals) > 0: 
-            self.ui.canvas.delete(ovals[0])
-            self.image.delete(coords)
-
-            self.file.set_saved(False)
-    
+        if len(ovals) > 0:
+            self.gui_constructor.canvas.delete(ovals[0])
+            self.pic.delete(coords)
+            self.file_mng.set_saved(False)
 
     def last(self):
-        if len (self.image.get()) >= 1:
-            elements = self.ui.canvas.find_overlapping (self.image.get()[-1][-5], self.image.get()[-1][-4],
-                                                        self.image.get()[-1][-3], self.image.get()[-1][-2])
-            
-            self.image.delete(self.ui.canvas.coords(elements[-1]))
-            self.ui.canvas.delete(elements[-1])
+        if len(self.pic.get()) >= 1:
+            elements = self.gui_constructor.canvas.find_overlapping(
+                self.pic.get()[-1][-5],
+                self.pic.get()[-1][-4],
+                self.pic.get()[-1][-3],
+                self.pic.get()[-1][-2],
+            )
 
-            self.file.set_saved(False)
-    
-
-    def __clear_button__(self):
-        self.image.clear()
-        self.ui.canvas.delete('all')
-        self.file.set_saved(True)
-
-
-    def __erase_button__(self):
-        if self.ui.erase_button.cget('bg') == 'white' and self.ui.erase_button.cget('bd') == 1:
-            self.ui.erase_button.config(bg = 'blue', bd = 3)
-            self.brush.set_mode('erase')
-
-        elif self.ui.erase_button.cget('bg') == 'blue' and self.ui.erase_button.cget('bd') == 3:
-            self.ui.erase_button.config(bg = 'white', bd = 1)
-            self.brush.set_mode('draw')
-
+            self.pic.delete(self.gui_constructor.canvas.coords(elements[-1]))
+            self.gui_constructor.canvas.delete(elements[-1])
+            self.file_mng.set_saved(False)
 
     def update(self):
-        self.ui.update()
+        self.gui_constructor.update()
 
+    def clear_btn_callback(self):
+        self.pic.clear()
+        self.gui_constructor.canvas.delete("all")
+        self.file_mng.set_saved(False)
 
-    def __on_closing__(self):
-        if not self.file.is_saved() and messagebox.askyesno('Save changes?'): self.save()
-    
-        self.ui.destroy()
+    def erase_btn_callback(self):
+        if (
+            self.gui_constructor.erase_button.cget("bg") == "white"
+            and self.gui_constructor.erase_button.cget("bd") == 1
+        ):
+            self.gui_constructor.erase_button.config(bg="blue", bd=3)
+            self.brush.set_mode("erase")
+        elif (
+            self.gui_constructor.erase_button.cget("bg") == "blue"
+            and self.gui_constructor.erase_button.cget("bd") == 3
+        ):
+            self.gui_constructor.erase_button.config(bg="white", bd=1)
+            self.brush.set_mode("draw")
 
+    def on_closing(self):
+        if not self.file_mng.is_saved() and messagebox.askyesno("Save changes?"):
+            self.save()
+        self.gui_constructor.destroy()
 
-    def __keyboard__(self, event):
-        if event.keysym == 's': self.save()
-        
-        elif event.keysym == 'o': self.open()
-        
-        elif event.keysym == 'z': self.last()
+    def keyboard_callback(self, event):
+        if event.keysym == "s":
+            self.save()
 
+        elif event.keysym == "o":
+            self.open()
 
-    def __mouse_motion__(self, event):
-        coords = [event.x - self.brush.get_size(), event.y - self.brush.get_size(),
-                  event.x + self.brush.get_size(), event.y + self.brush.get_size()]
+        elif event.keysym == "z":
+            self.last()
 
+    def mouse_motion_callback(self, event):
+        coords = [
+            event.x - self.brush.get_size(),
+            event.y - self.brush.get_size(),
+            event.x + self.brush.get_size(),
+            event.y + self.brush.get_size(),
+        ]
         draw_mode = self.brush.get_mode()
-        if draw_mode == 'draw': self.draw(coords, self.brush.get_color())
-        elif draw_mode == 'erase': self.erase(coords)
+        if draw_mode == "draw":
+            self.draw(coords, self.brush.get_color())
+        elif draw_mode == "erase":
+            self.erase(coords)
+        self.file_mng.set_saved(False)
 
-        self.file.set_saved(False)
 
-
-
-program = StandArt()
+program = Main()
 
 # if '*.art' file in OS is opened
-if len(sys.argv) > 1: program.open(sys.argv[1])
+if len(sys.argv) > 1:
+    program.open(sys.argv[1])
 
 
-while True: 
-    try: program.update()
-    except: break
+while True:
+    try:
+        program.update()
+    except:
+        break
